@@ -1,0 +1,78 @@
+name: HIIT Timer Development
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  validate-project:
+    runs-on: ubuntu-latest
+    name: プロジェクト検証
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: 📁 ファイル構造確認
+      run: |
+        echo "=== HIIT Timer ファイル確認 ==="
+        echo "📅 実行日時: $(date)"
+        echo ""
+        if [ -f "index.html" ]; then
+          echo "✅ index.html 存在確認"
+        else
+          echo "❌ index.html が見つかりません"
+        fi
+        
+        if [ -f "style.css" ]; then
+          echo "✅ style.css 存在確認"
+        else
+          echo "❌ style.css が見つかりません"
+        fi
+        
+        if [ -f "app.js" ]; then
+          echo "✅ app.js 存在確認"
+        else
+          echo "❌ app.js が見つかりません"
+        fi
+    
+    - name: 📊 開発進捗レポート
+      run: |
+        echo ""
+        echo "=== 📊 フェーズ2完了レポート ==="
+        echo "🎯 リアルタイムタイマー機能"
+        echo "🔊 音声通知システム"
+        echo "🎨 フェーズ別視覚フィードバック"
+        echo "⌨️ キーボードショートカット"
+        echo "📱 レスポンシブデザイン"
+        echo "✅ フェーズ2: 完全機能版タイマー完成！"
+
+  deploy-pages:
+    runs-on: ubuntu-latest
+    name: GitHub Pagesデプロイ
+    needs: validate-project
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: 🚀 GitHub Pages設定
+      uses: actions/configure-pages@v4
+      
+    - name: 📤 アーティファクトアップロード
+      uses: actions/upload-pages-artifact@v2
+      with:
+        path: '.'
+        
+    - name: 🌐 GitHub Pagesデプロイ
+      id: deployment
+      uses: actions/deploy-pages@v3

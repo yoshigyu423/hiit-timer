@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HIIT Timer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- ホーム画面（ワークアウト一覧） -->
+        <div class="home-display" id="homeDisplay">
+            <div class="home-header">
+                <h1>🏃‍♂️ HIIT Timer</h1>
+                <p>ワークアウトを選択してください</p>
+            </div>
+            
+            <div class="workout-list" id="workoutList">
+                <!-- ワークアウト一覧がここに表示される -->
+            </div>
+            
+            <div class="home-actions">
+                <button class="btn btn-primary" id="createWorkoutBtn">➕ 新しいワークアウト</button>
+            </div>
+        </div>
+
+        <!-- メイン画面（タイマー画面） -->
+        <div class="main-display hidden" id="mainDisplay">
+            <!-- タイマー表示エリア -->
+            <main class="timer-section">
+                <div class="timer-display">
+                    <div class="time">00:30</div>
+                    <div class="phase">準備中</div>
+                    <div class="task-info">
+                        <div class="current-task">タスク 1 / 6</div>
+                        <div class="task-name">スクワット</div>
+                    </div>
+                    <!-- 手動実行時の次へボタン -->
+                    <div class="manual-controls" id="manualControls" style="display: none;">
+                        <button class="btn btn-next" id="nextTaskBtn">次のタスクへ ➡️</button>
+                    </div>
+                    <!-- ワークアウト完了時のボタン -->
+                    <div class="completion-controls" id="completionControls" style="display: none;">
+                        <button class="btn btn-primary" id="completionBtn">完了 ✅</button>
+                    </div>
+                </div>
+            </main>
+
+            <!-- コントロールボタン -->
+            <section class="controls">
+                <button class="btn btn-primary" id="startBtn">スタート</button>
+                <button class="btn btn-secondary" id="pauseBtn" style="display:none;">一時停止</button>
+            </section>
+            
+            <!-- ホーム画面に戻るボタン -->
+            <section class="home-nav">
+                <button class="btn btn-home" id="homeBtn">🏠 ホーム</button>
+            </section>
+        </div>
+
+        <!-- タスク設定エリア（初期状態は非表示） -->
+        <section class="task-settings hidden" id="taskSettings">
+            <div class="settings-header">
+                <h2>⚙️ 設定</h2>
+            </div>
+
+            <!-- 1段目: タイマー制御ボタン -->
+            <div class="timer-controls-section">
+                <div class="timer-control-buttons">
+                    <button class="btn btn-skip" id="skipTaskBtn" disabled>次のタスクへ ⏭️</button>
+                    <button class="btn btn-danger" id="resetBtnSettings">リセット 🔄</button>
+                </div>
+            </div>
+
+            <!-- 2段目: ワークアウト名と保存 -->
+            <div class="workout-name-section">
+                <label for="workoutName">ワークアウト</label>
+                <div class="workout-name-controls">
+                    <input type="text" id="workoutName" value="カスタムワークアウト" placeholder="ワークアウト名を入力">
+                    <button class="btn btn-outline" id="saveWorkoutBtn">💾 保存</button>
+                </div>
+            </div>
+
+
+            <!-- 3段目: タスクリスト -->
+            <div class="task-list" id="taskList">
+                <!-- タスクアイテムがここに動的に追加される -->
+            </div>
+            
+            <div class="add-task-section">
+                <button class="btn btn-outline" id="addTaskBtn">➕ タスクを追加</button>
+            </div>
+
+            <!-- 4段目: 実行モード設定 -->
+            <div class="setting-row">
+                <span class="setting-label">⚡ 実行モード</span>
+                <div class="mode-buttons">
+                    <button class="mode-btn active" id="autoModeBtn" data-mode="auto">
+                        🔄 自動実行
+                    </button>
+                    <button class="mode-btn" id="manualModeBtn" data-mode="manual">
+                        👆 手動実行
+                    </button>
+                </div>
+            </div>
+
+            <!-- 5段目: 無限ループ設定 -->
+            <div class="setting-row">
+                <span class="setting-label">🔁 ループ設定</span>
+                <div class="loop-toggle">
+                    <input type="checkbox" id="infiniteLoopToggle" class="toggle-checkbox">
+                    <label for="infiniteLoopToggle" class="toggle-label">
+                        <span class="toggle-switch"></span>
+                    </label>
+                </div>
+            </div>
+        </section>
+
+        <!-- 設定ボタン -->
+        <section class="settings-toggle">
+            <button class="btn btn-settings" id="settingsToggleBtn">
+                <span class="settings-icon">⚙️</span>
+                <span class="settings-text"></span>
+            </button>
+        </section>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
