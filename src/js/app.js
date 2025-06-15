@@ -24,7 +24,8 @@ let timerState = {
 
 // UI状態
 let uiState = {
-    settingsVisible: false // 設定表示状態
+    settingsVisible: false, // 設定表示状態
+    notificationsEnabled: false // 通知有効状態
 };
 
 // カスタムタスクリスト
@@ -57,7 +58,93 @@ const elements = {
     addTaskBtn: document.getElementById('addTaskBtn'),
     autoModeBtn: document.getElementById('autoModeBtn'),
     manualModeBtn: document.getElementById('manualModeBtn'),
-    modeDescription: document.getElementById('modeDescription')
+    modeDescription: document.getElementById('modeDescription'),
+    enableNotificationsBtn: document.getElementById('enableNotificationsBtn'),
+    notificationStatus: document.getElementById('notificationStatus')
+};
+
+/**
+ * 通知管理
+ */
+const notificationManager = {
+    isSupported: 'Notification' in window,
+    permission: null,
+    
+    async requestPermission() {
+        if (!this.isSupported) {
+            console.log('このブラウザではWeb通知はサポートされていません');
+            this.updateNotificationStatus('このブラウザは通知をサポートしていません');
+            return false;
+        }
+        
+        try {
+            this.permission = await Notification.requestPermission();
+            uiState.notificationsEnabled = this.permission === 'granted';
+            this.updateNotificationStatus();
+            return this.permission === 'granted';
+        } catch (error) {
+            console.error('通知許可の取得に失敗:', error);
+            this.updateNotificationStatus('通知許可の取得に失敗しました');
+            return false;
+        }
+    },
+    
+    showNotification(title, options = {}) {
+        if (!uiState.notificationsEnabled || this.permission !== 'granted') {
+            return;
+        }
+        
+        const notification = new Notification(title, {
+            icon: '/favicon.ico',
+            badge: '/favicon.ico',
+            ...options
+        });
+        
+        // 自動でクローズ
+        setTimeout(() => {
+            notification.close();
+        }, 5000);
+        
+        return notification;
+    },
+    
+    updateNotificationStatus(customMessage = null) {
+        if (!elements.notificationStatus) return;
+        
+        let statusText = '';
+        let buttonText = '📱 Web通知を有効にする';
+        let buttonDisabled = false;
+        
+        if (customMessage) {
+            statusText = customMessage;
+            buttonDisabled = true;
+        } else if (!this.isSupported) {
+            statusText = 'このブラウザは通知をサポートしていません';
+            buttonDisabled = true;
+        } else if (this.permission === 'granted') {
+            statusText = '✅ 通知が有効です';
+            buttonText = '🔔 通知有効';
+            buttonDisabled = true;
+        } else if (this.permission === 'denied') {
+            statusText = '❌ 通知が拒否されています。ブラウザ設定から許可してください';
+            buttonText = '🚫 通知拒否済み';
+            buttonDisabled = true;
+        } else {
+            statusText = '通知許可が必要です';
+        }
+        
+        elements.notificationStatus.innerHTML = `<p>${statusText}</p>`;
+        elements.enableNotificationsBtn.textContent = buttonText;
+        elements.enableNotificationsBtn.disabled = buttonDisabled;
+    },
+    
+    checkInitialPermission() {
+        if (this.isSupported) {
+            this.permission = Notification.permission;
+            uiState.notificationsEnabled = this.permission === 'granted';
+            this.updateNotificationStatus();
+        }
+    }
 };
 
 /**
@@ -89,9 +176,12 @@ const voiceManager = {
     },
     
     announceTaskComplete(isManual) {
-        if (isManual) {
-            this.speak('タスク完了！次へボタンを押してください。');
-        }
+        const message = isManual ? 'タスク完了！次へボタンを押してください。' : 'タスク完了！';
+        this.speak(message);
+        notificationManager.showNotification('タスク完了', {
+            body: message,
+            tag: 'task-complete'
+        });
     }
 };
 
@@ -292,9 +382,17 @@ function completeWorkout() {
     timerState.isWaitingForNext = false;
     clearInterval(timerState.intervalId);
     
-    voiceManager.speak('お疲れ様でした！ワークアウト完了です！');
-    
     const totalTime = customTasks.reduce((sum, task) => sum + task.duration, 0);
+    const completionMessage = `お疲れ様でした！ワークアウト完了です！`;
+    
+    voiceManager.speak(completionMessage);
+    
+    // 完了通知
+    notificationManager.showNotification('🎉 ワークアウト完了！', {
+        body: `総タスク数: ${customTasks.length}個、総時間: ${formatTime(totalTime)}`,
+        tag: 'workout-complete',
+        requireInteraction: true
+    });
     
     const message = `
 🎉 ワークアウト完了！
@@ -494,6 +592,14 @@ function setupEventListeners() {
     elements.autoModeBtn.addEventListener('click', () => setExecutionMode('auto'));
     elements.manualModeBtn.addEventListener('click', () => setExecutionMode('manual'));
     
+    // 通知許可ボタン
+    elements.enableNotificationsBtn.addEventListener('click', async () => {
+        const granted = await notificationManager.requestPermission();
+        if (granted) {
+            console.log('通知が有効になりました');
+        }
+    });
+    
     elements.workoutNameInput.addEventListener('input', (e) => {
         timerState.workoutName = e.target.value || 'カスタムワークアウト';
     });
@@ -538,6 +644,9 @@ function initializeApp() {
     renderTaskList();
     initializeTimer();
     setupEventListeners();
+    
+    // 通知の初期状態チェック
+    notificationManager.checkInitialPermission();
     
     console.log('✅ 初期化完了！');
 }
