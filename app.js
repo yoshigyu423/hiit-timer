@@ -5,7 +5,8 @@
 
 // アプリケーション設定
 const APP_CONFIG = {
-    tickInterval: 1000,
+    tickInterval: 100, // 100msで高精度チェック
+    displayUpdateInterval: 1000, // 表示更新は1秒間隔
     countdownFrom: 3
 };
 
@@ -293,7 +294,30 @@ function updateButtonStates() {
 }
 
 /**
- * タイマーのメインループ（安定版）
+ * 高精度タイマー開始
+ */
+function startHighPrecisionTimer() {
+    clearInterval(timerState.intervalId);
+    
+    function highPrecisionTick() {
+        if (!timerState.isRunning) {
+            return; // タイマーが停止していれば終了
+        }
+        
+        timerTick();
+        
+        // 高精度で継続実行
+        if (timerState.isRunning) {
+            timerState.intervalId = requestAnimationFrame(highPrecisionTick);
+        }
+    }
+    
+    // 初回実行
+    timerState.intervalId = requestAnimationFrame(highPrecisionTick);
+}
+
+/**
+ * タイマーのメインループ（高精度・バックグラウンド対応版）
  */
 function timerTick() {
     if (!timerState.isRunning) {
@@ -307,19 +331,20 @@ function timerTick() {
     // 時間が変化した場合の処理
     if (newCurrentTime !== timerState.currentTime) {
         const timeDiff = timerState.currentTime - newCurrentTime;
-        
-        // 大幅な時間のずれ（2秒以上）があった場合はバックグラウンド実行とみなす
-        if (timeDiff > 2) {
-            console.log(`バックグラウンド実行を検出: ${timeDiff}秒の補正`);
-            voiceManager.speak('タイマーを再同期しました');
-        }
-        
-        // 前の時間値を保存（カウントダウン音声用）
         const previousTime = timerState.currentTime;
         timerState.currentTime = newCurrentTime;
         
-        // カウントダウン音声（3秒、2秒、1秒）
-        if (timerState.currentTime <= 3 && timerState.currentTime > 0 && previousTime > timerState.currentTime) {
+        // バックグラウンド検出（3秒以上のズレ、かつ正常なカウントダウンではない場合）
+        const isBackgroundReturn = timeDiff > 3 && timeDiff > 1;
+        if (isBackgroundReturn) {
+            console.log(`バックグラウンド復帰検出: ${timeDiff}秒の補正`);
+            // バックグラウンド復帰時は音声なしで静かに補正
+        }
+        
+        // 通常のカウントダウン音声（3秒、2秒、1秒）
+        // バックグラウンド復帰時ではなく、正常な1秒減少時のみ
+        const isNormalCountdown = timeDiff === 1 && !isBackgroundReturn;
+        if (timerState.currentTime <= 3 && timerState.currentTime > 0 && isNormalCountdown) {
             console.log(`カウントダウン音声: ${timerState.currentTime}秒`);
             voiceManager.countdown(timerState.currentTime);
         }
@@ -349,6 +374,7 @@ function handleTaskComplete() {
         } else {
             // 手動実行：次へボタン待ち状態にする
             clearInterval(timerState.intervalId);
+            cancelAnimationFrame(timerState.intervalId);
             timerState.isRunning = false;
             timerState.isWaitingForNext = true;
             voiceManager.announceTaskComplete(true);
@@ -400,7 +426,10 @@ function startTask(taskIndex) {
 function completeWorkout() {
     timerState.isRunning = false;
     timerState.isWaitingForNext = false;
+    
+    // タイマー停止
     clearInterval(timerState.intervalId);
+    cancelAnimationFrame(timerState.intervalId);
     
     voiceManager.speak('お疲れ様でした！ワークアウト完了です！');
     
@@ -411,8 +440,10 @@ function completeWorkout() {
  * タイマーを初期化
  */
 function initializeTimer() {
+    // タイマー停止（両方のタイマータイプに対応）
     if (timerState.intervalId) {
         clearInterval(timerState.intervalId);
+        cancelAnimationFrame(timerState.intervalId);
     }
     
     timerState.isRunning = false;
@@ -511,9 +542,9 @@ function startNewSession() {
             voiceManager.countdown(timerState.currentTime);
         }
         
-        // setIntervalでタイマーを開始
+        // 高精度タイマーを開始
         clearInterval(timerState.intervalId); // 既存のタイマーをクリア
-        timerState.intervalId = setInterval(timerTick, APP_CONFIG.tickInterval);
+        startHighPrecisionTimer();
         
         updateDisplay();
     });
@@ -534,9 +565,9 @@ function handleStart() {
         timerState.startTime = Date.now();
         timerState.expectedEndTime = timerState.startTime + (timerState.currentTime * 1000);
         
-        // タイマーで再開
+        // 高精度タイマーで再開
         clearInterval(timerState.intervalId);
-        timerState.intervalId = setInterval(timerTick, APP_CONFIG.tickInterval);
+        startHighPrecisionTimer();
         voiceManager.speak('タイマーを再開');
     } else if (timerState.currentTaskIndex >= customTasks.length) {
         initializeTimer();
@@ -553,7 +584,11 @@ function handleStart() {
 function handlePause() {
     timerState.isRunning = false;
     timerState.isPaused = true;
+    
+    // タイマー停止（setIntervalとrequestAnimationFrame両方に対応）
     clearInterval(timerState.intervalId);
+    cancelAnimationFrame(timerState.intervalId);
+    
     voiceManager.speak('一時停止');
     updateDisplay();
 }
@@ -579,7 +614,7 @@ function handleNextTask() {
     // タイマーを再開して次のタスクに進む
     timerState.isRunning = true;
     clearInterval(timerState.intervalId);
-    timerState.intervalId = setInterval(timerTick, APP_CONFIG.tickInterval);
+    startHighPrecisionTimer();
     
     proceedToNextTask();
 }
