@@ -64,11 +64,37 @@ const elements = {
 };
 
 /**
- * 通知管理
+ * 通知管理（Mac対応強化版）
  */
 const notificationManager = {
     isSupported: 'Notification' in window,
     permission: null,
+    testNotification: null,
+    
+    // Mac特有の通知設定を確認
+    async checkMacNotificationSettings() {
+        // Macでのブラウザ通知状態を詳細チェック
+        const userAgent = navigator.userAgent;
+        const isMac = /Mac|iPhone|iPad|iPod/.test(userAgent);
+        const isSafari = /^((?!chrome|android).)*safari/i.test(userAgent);
+        const isChrome = /Chrome/.test(userAgent) && /Google Inc/.test(navigator.vendor);
+        const isFirefox = /Firefox/.test(userAgent);
+        
+        console.log('=== 通知環境情報 ===');
+        console.log('Platform:', isMac ? 'Mac' : 'Other');
+        console.log('Browser:', isSafari ? 'Safari' : isChrome ? 'Chrome' : isFirefox ? 'Firefox' : 'Other');
+        console.log('Notification support:', this.isSupported);
+        console.log('Current permission:', Notification.permission);
+        
+        return {
+            isMac,
+            isSafari,
+            isChrome,
+            isFirefox,
+            isSupported: this.isSupported,
+            permission: Notification.permission
+        };
+    },
     
     async requestPermission() {
         if (!this.isSupported) {
@@ -78,34 +104,152 @@ const notificationManager = {
         }
         
         try {
+            // Mac環境情報を表示
+            const envInfo = await this.checkMacNotificationSettings();
+            
+            // 既に許可されている場合
+            if (Notification.permission === 'granted') {
+                this.permission = 'granted';
+                uiState.notificationsEnabled = true;
+                this.updateNotificationStatus();
+                this.testNotificationDisplay();
+                return true;
+            }
+            
+            // 拒否されている場合のガイダンス
+            if (Notification.permission === 'denied') {
+                this.permission = 'denied';
+                uiState.notificationsEnabled = false;
+                let message = '❌ 通知が拒否されています。';
+                
+                if (envInfo.isSafari) {
+                    message += '\n\nSafariで通知を有効にする方法：\n1. Safari > 環境設定 > Webサイト > 通知\n2. このサイトを「許可」に設定';
+                } else if (envInfo.isChrome) {
+                    message += '\n\nChromeで通知を有効にする方法：\n1. アドレスバーの🔒アイコンをクリック\n2. 通知を「許可」に設定\n3. ページを再読み込み';
+                } else if (envInfo.isFirefox) {
+                    message += '\n\nFirefoxで通知を有効にする方法：\n1. アドレスバーの盾アイコンをクリック\n2. 通知設定を変更\n3. ページを再読み込み';
+                }
+                
+                this.updateNotificationStatus(message);
+                return false;
+            }
+            
+            // 許可をリクエスト
+            console.log('通知許可をリクエスト中...');
             this.permission = await Notification.requestPermission();
             uiState.notificationsEnabled = this.permission === 'granted';
+            
+            if (this.permission === 'granted') {
+                console.log('✅ 通知許可が取得されました');
+                this.testNotificationDisplay();
+            } else {
+                console.log('❌ 通知許可が拒否されました');
+            }
+            
             this.updateNotificationStatus();
             return this.permission === 'granted';
         } catch (error) {
             console.error('通知許可の取得に失敗:', error);
-            this.updateNotificationStatus('通知許可の取得に失敗しました');
+            this.updateNotificationStatus('通知許可の取得に失敗しました: ' + error.message);
             return false;
         }
     },
     
-    showNotification(title, options = {}) {
-        if (!uiState.notificationsEnabled || this.permission !== 'granted') {
+    // 通知テスト表示
+    testNotificationDisplay() {
+        if (this.permission !== 'granted') {
+            console.log('通知テストスキップ: 許可されていません');
             return;
         }
         
-        const notification = new Notification(title, {
-            icon: '/favicon.ico',
-            badge: '/favicon.ico',
-            ...options
-        });
+        try {
+            console.log('通知テストを実行中...');
+            const notification = new Notification('🎉 通知テスト', {
+                body: 'HIIT Timer の通知が正常に動作しています！',
+                icon: this.getNotificationIcon(),
+                badge: this.getNotificationIcon(),
+                tag: 'test-notification',
+                requireInteraction: false,
+                silent: false
+            });
+            
+            notification.onclick = () => {
+                console.log('通知がクリックされました');
+                notification.close();
+            };
+            
+            // 5秒後に自動で閉じる
+            setTimeout(() => {
+                notification.close();
+                console.log('通知テスト完了');
+            }, 5000);
+            
+            this.testNotification = notification;
+            
+        } catch (error) {
+            console.error('通知テスト失敗:', error);
+        }
+    },
+    
+    // アイコンパスを動的に取得
+    getNotificationIcon() {
+        // アイコンファイルの存在確認と適切なパス設定
+        const iconPaths = [
+            '/favicon.ico',
+            './favicon.ico',
+            '/src/favicon.ico',
+            './src/favicon.ico',
+            // フォールバック：データURIで小さなアイコンを生成
+            'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOCIgZmlsbD0iIzM5OGJmNCIvPgo8dGV4dCB4PSIxNiIgeT0iMjAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5IPC90ZXh0Pgo8L3N2Zz4K'
+        ];
         
-        // 自動でクローズ
-        setTimeout(() => {
-            notification.close();
-        }, 5000);
+        return iconPaths[iconPaths.length - 1]; // フォールバックアイコンを使用
+    },
+    
+    showNotification(title, options = {}) {
+        if (!uiState.notificationsEnabled || this.permission !== 'granted') {
+            console.log('通知スキップ:', title, '- 許可されていません');
+            return null;
+        }
         
-        return notification;
+        try {
+            const notificationOptions = {
+                body: options.body || '',
+                icon: this.getNotificationIcon(),
+                badge: this.getNotificationIcon(),
+                tag: options.tag || 'hiit-timer',
+                requireInteraction: options.requireInteraction || false,
+                silent: options.silent || false,
+                ...options
+            };
+            
+            console.log('通知表示:', title, notificationOptions);
+            
+            const notification = new Notification(title, notificationOptions);
+            
+            notification.onclick = () => {
+                console.log('通知クリック:', title);
+                window.focus();
+                notification.close();
+            };
+            
+            notification.onerror = (error) => {
+                console.error('通知エラー:', error);
+            };
+            
+            // 自動でクローズ（requireInteractionがfalseの場合のみ）
+            if (!notificationOptions.requireInteraction) {
+                setTimeout(() => {
+                    notification.close();
+                }, 5000);
+            }
+            
+            return notification;
+            
+        } catch (error) {
+            console.error('通知表示エラー:', error);
+            return null;
+        }
     },
     
     updateNotificationStatus(customMessage = null) {
@@ -117,23 +261,23 @@ const notificationManager = {
         
         if (customMessage) {
             statusText = customMessage;
-            buttonDisabled = true;
+            buttonDisabled = !this.isSupported || this.permission === 'denied';
         } else if (!this.isSupported) {
             statusText = 'このブラウザは通知をサポートしていません';
             buttonDisabled = true;
         } else if (this.permission === 'granted') {
             statusText = '✅ 通知が有効です';
-            buttonText = '🔔 通知有効';
-            buttonDisabled = true;
+            buttonText = '🔔 通知テスト';
+            buttonDisabled = false; // テスト用にボタンを有効に
         } else if (this.permission === 'denied') {
             statusText = '❌ 通知が拒否されています。ブラウザ設定から許可してください';
-            buttonText = '🚫 通知拒否済み';
-            buttonDisabled = true;
+            buttonText = '⚙️ 設定方法を確認';
+            buttonDisabled = false; // 設定ガイド用にボタンを有効に
         } else {
             statusText = '通知許可が必要です';
         }
         
-        elements.notificationStatus.innerHTML = `<p>${statusText}</p>`;
+        elements.notificationStatus.innerHTML = `<p style="white-space: pre-line;">${statusText}</p>`;
         elements.enableNotificationsBtn.textContent = buttonText;
         elements.enableNotificationsBtn.disabled = buttonDisabled;
     },
@@ -143,6 +287,9 @@ const notificationManager = {
             this.permission = Notification.permission;
             uiState.notificationsEnabled = this.permission === 'granted';
             this.updateNotificationStatus();
+            
+            // 環境情報をコンソールに出力
+            this.checkMacNotificationSettings();
         }
     }
 };
@@ -178,9 +325,10 @@ const voiceManager = {
     announceTaskComplete(isManual) {
         const message = isManual ? 'タスク完了！次へボタンを押してください。' : 'タスク完了！';
         this.speak(message);
-        notificationManager.showNotification('タスク完了', {
+        notificationManager.showNotification('🎯 タスク完了', {
             body: message,
-            tag: 'task-complete'
+            tag: 'task-complete',
+            requireInteraction: isManual
         });
     }
 };
@@ -389,7 +537,7 @@ function completeWorkout() {
     
     // 完了通知
     notificationManager.showNotification('🎉 ワークアウト完了！', {
-        body: `総タスク数: ${customTasks.length}個、総時間: ${formatTime(totalTime)}`,
+        body: `お疲れ様でした！\n総タスク数: ${customTasks.length}個、総時間: ${formatTime(totalTime)}`,
         tag: 'workout-complete',
         requireInteraction: true
     });
@@ -594,9 +742,21 @@ function setupEventListeners() {
     
     // 通知許可ボタン
     elements.enableNotificationsBtn.addEventListener('click', async () => {
-        const granted = await notificationManager.requestPermission();
-        if (granted) {
-            console.log('通知が有効になりました');
+        // ボタンのテキストに応じて動作を変更
+        const buttonText = elements.enableNotificationsBtn.textContent;
+        
+        if (buttonText.includes('通知テスト')) {
+            // 通知テスト実行
+            notificationManager.testNotificationDisplay();
+        } else if (buttonText.includes('設定方法')) {
+            // 設定方法を再表示
+            await notificationManager.requestPermission();
+        } else {
+            // 通常の許可リクエスト
+            const granted = await notificationManager.requestPermission();
+            if (granted) {
+                console.log('通知が有効になりました');
+            }
         }
     });
     
