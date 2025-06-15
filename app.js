@@ -401,30 +401,11 @@ function startNewSession() {
     timerState.currentTime = APP_CONFIG.countdownFrom;
     timerState.isWaitingForNext = false;
     
-    // 音声読み上げ完了後にカウントダウン開始
-    const utterance = new SpeechSynthesisUtterance(`${timerState.workoutName}を開始します`);
-    utterance.lang = 'ja-JP';
-    utterance.rate = 1.0;
-    utterance.volume = 0.8;
+    voiceManager.speak(`${timerState.workoutName}を開始します`);
     
-    utterance.onend = () => {
-        // 音声読み上げ完了後にカウントダウン開始
-        updateDisplay();
-        // 最初の3秒を読み上げ
-        voiceManager.countdown(timerState.currentTime);
-        timerState.intervalId = setInterval(timerTick, APP_CONFIG.tickInterval);
-    };
-    
-    if (voiceManager.isSupported) {
-        speechSynthesis.speak(utterance);
-    } else {
-        console.log('音声通知:', `${timerState.workoutName}を開始します`);
-        // 音声未対応の場合は即座にカウントダウン開始
-        updateDisplay();
-        // 最初の3秒を読み上げ
-        voiceManager.countdown(timerState.currentTime);
-        timerState.intervalId = setInterval(timerTick, APP_CONFIG.tickInterval);
-    }
+    // 音声読み上げに依存せず即座にタイマー開始
+    timerState.intervalId = setInterval(timerTick, APP_CONFIG.tickInterval);
+    updateDisplay();
 }
 
 /**
