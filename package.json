@@ -1,0 +1,34 @@
+{
+  "name": "hiit-timer",
+  "version": "1.0.0",
+  "description": "WebベースのHIITトレーニングタイマーアプリケーション",
+  "main": "index.html",
+  "scripts": {
+    "start": "python -m http.server 8000",
+    "serve": "npx serve .",
+    "build": "echo 'No build process needed for static files'",
+    "deploy": "gh-pages -d ."
+  },
+  "keywords": [
+    "hiit",
+    "timer",
+    "workout",
+    "fitness",
+    "training",
+    "web-app"
+  ],
+  "author": "HIIT Timer Developer",
+  "license": "MIT",
+  "homepage": "https://yoshigyu423.github.io/hiit-timer/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yoshigyu423/hiit-timer.git"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.0.0",
+    "serve": "^14.0.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
