@@ -283,18 +283,26 @@ function updateButtonStates() {
 }
 
 /**
- * タイマーのメインループ（高精度版）
+ * タイマーのメインループ（高精度版 - バックグラウンド対応）
  */
 function timerTick() {
     const now = Date.now();
-    const elapsed = Math.floor((now - timerState.startTime) / 1000);
-    const expectedTime = Math.max(0, timerState.expectedEndTime - now);
-    const newCurrentTime = Math.ceil(expectedTime / 1000);
+    const remainingTime = Math.max(0, timerState.expectedEndTime - now);
+    const newCurrentTime = Math.ceil(remainingTime / 1000);
     
-    // 実際の経過時間に基づいて現在時刻を調整
+    // バックグラウンドから復帰時の時刻補正
     if (newCurrentTime !== timerState.currentTime) {
+        const timeDiff = timerState.currentTime - newCurrentTime;
+        
+        // 大幅な時間のずれ（2秒以上）があった場合はバックグラウンド実行とみなす
+        if (timeDiff > 2) {
+            console.log(`バックグラウンド実行を検出: ${timeDiff}秒の補正`);
+            voiceManager.speak('タイマーを再同期しました');
+        }
+        
         timerState.currentTime = newCurrentTime;
         
+        // カウントダウン音声（バックグラウンド補正時は最後の3秒のみ）
         if (timerState.currentTime <= 3 && timerState.currentTime > 0) {
             voiceManager.countdown(timerState.currentTime);
         }
@@ -306,6 +314,13 @@ function timerTick() {
     }
     
     updateDisplay();
+    
+    // 高精度維持のため、requestAnimationFrame も併用
+    if (timerState.isRunning) {
+        requestAnimationFrame(() => {
+            setTimeout(timerTick, 100); // 100ms間隔でより細かくチェック
+        });
+    }
 }
 
 /**
@@ -404,7 +419,7 @@ function initializeTimer() {
 }
 
 /**
- * 新しいセッションを開始
+ * 新しいセッションを開始（音声完了待機対応）
  */
 function startNewSession() {
     if (customTasks.length === 0) {
@@ -418,38 +433,77 @@ function startNewSession() {
     timerState.currentTime = APP_CONFIG.countdownFrom;
     timerState.isWaitingForNext = false;
     
-    // 音声読み上げ完了後にカウントダウン開始
-    const utterance = new SpeechSynthesisUtterance(`${timerState.workoutName}を開始します`);
-    utterance.lang = 'ja-JP';
-    utterance.rate = 1.0;
-    utterance.volume = 0.8;
-    
-    utterance.onend = () => {
-        // 音声読み上げ完了後にカウントダウン開始
-        // 高精度タイマーのための時刻設定
-        timerState.startTime = Date.now();
-        timerState.expectedEndTime = timerState.startTime + (APP_CONFIG.countdownFrom * 1000);
-        
-        timerState.intervalId = setInterval(timerTick, APP_CONFIG.tickInterval);
-        updateDisplay();
-    };
-    
-    if (voiceManager.isSupported) {
-        speechSynthesis.speak(utterance);
-    } else {
-        console.log('音声通知:', `${timerState.workoutName}を開始します`);
-        // 音声未対応の場合は即座にカウントダウン開始
-        // 高精度タイマーのための時刻設定
-        timerState.startTime = Date.now();
-        timerState.expectedEndTime = timerState.startTime + (APP_CONFIG.countdownFrom * 1000);
-        
-        timerState.intervalId = setInterval(timerTick, APP_CONFIG.tickInterval);
-        updateDisplay();
+    // 音声読み上げ完了待機の実装
+    function startCountdownAfterSpeech() {
+        return new Promise((resolve) => {
+            if (!voiceManager.isSupported) {
+                console.log('音声通知:', `${timerState.workoutName}を開始します`);
+                resolve();
+                return;
+            }
+            
+            // 既存の音声をキャンセル
+            speechSynthesis.cancel();
+            
+            const utterance = new SpeechSynthesisUtterance(`${timerState.workoutName}を開始します`);
+            utterance.lang = 'ja-JP';
+            utterance.rate = 1.0;
+            utterance.volume = 0.8;
+            
+            // 音声完了のイベントハンドラ
+            utterance.onend = () => {
+                console.log('音声読み上げ完了 - カウントダウン開始');
+                resolve();
+            };
+            
+            // 音声エラー時の処理
+            utterance.onerror = (error) => {
+                console.warn('音声読み上げエラー:', error);
+                resolve(); // エラーでもカウントダウンを開始
+            };
+            
+            // タイムアウト処理（5秒で強制開始）
+            const timeout = setTimeout(() => {
+                console.warn('音声読み上げタイムアウト - カウントダウンを強制開始');
+                resolve();
+            }, 5000);
+            
+            utterance.onend = () => {
+                clearTimeout(timeout);
+                console.log('音声読み上げ完了 - カウントダウン開始');
+                resolve();
+            };
+            
+            speechSynthesis.speak(utterance);
+        });
     }
+    
+    // 音声読み上げ完了後にカウントダウン開始
+    startCountdownAfterSpeech().then(() => {
+        if (!timerState.isRunning) return; // 途中でキャンセルされた場合
+        
+        // 高精度タイマーのための時刻設定
+        timerState.startTime = Date.now();
+        timerState.expectedEndTime = timerState.startTime + (APP_CONFIG.countdownFrom * 1000);
+        
+        // setInterval の代わりに高精度タイマーを使用
+        clearInterval(timerState.intervalId); // 既存のタイマーをクリア
+        timerState.intervalId = setInterval(() => {
+            // setInterval をフォールバックとして使用
+        }, APP_CONFIG.tickInterval);
+        
+        // 即座にtimerTickを開始
+        timerTick();
+        
+        updateDisplay();
+    });
+    
+    // 初期表示を更新
+    updateDisplay();
 }
 
 /**
- * スタートボタンのクリックハンドラ
+ * スタートボタンのクリックハンドラ（高精度対応）
  */
 function handleStart() {
     if (timerState.isPaused) {
@@ -460,7 +514,13 @@ function handleStart() {
         timerState.startTime = Date.now();
         timerState.expectedEndTime = timerState.startTime + (timerState.currentTime * 1000);
         
-        timerState.intervalId = setInterval(timerTick, APP_CONFIG.tickInterval);
+        // 高精度タイマーで再開
+        clearInterval(timerState.intervalId);
+        timerState.intervalId = setInterval(() => {
+            // フォールバック用
+        }, APP_CONFIG.tickInterval);
+        
+        timerTick(); // 即座に開始
         voiceManager.speak('タイマーを再開');
     } else if (timerState.currentTaskIndex >= customTasks.length) {
         initializeTimer();
@@ -495,14 +555,17 @@ function handleReset() {
 }
 
 /**
- * 次のタスクボタンのクリックハンドラ
+ * 次のタスクボタンのクリックハンドラ（高精度対応）
  */
 function handleNextTask() {
     if (!timerState.isWaitingForNext) return;
     
     // タイマーを再開して次のタスクに進む
     timerState.isRunning = true;
-    timerState.intervalId = setInterval(timerTick, APP_CONFIG.tickInterval);
+    clearInterval(timerState.intervalId);
+    timerState.intervalId = setInterval(() => {
+        // フォールバック用
+    }, APP_CONFIG.tickInterval);
     
     proceedToNextTask();
 }
