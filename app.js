@@ -21,7 +21,9 @@ let timerState = {
     executionMode: 'auto', // 'auto' または 'manual'
     isWaitingForNext: false, // 手動モードでタスク完了待ち状態
     infiniteLoop: false, // 無限ループモード
-    loopCount: 0 // 完了したループの回数
+    loopCount: 0, // 完了したループの回数
+    startTime: null, // タイマー開始時刻
+    expectedEndTime: null // 予定終了時刻
 };
 
 // UI状態
@@ -281,17 +283,26 @@ function updateButtonStates() {
 }
 
 /**
- * タイマーのメインループ
+ * タイマーのメインループ（高精度版）
  */
 function timerTick() {
-    timerState.currentTime--;
+    const now = Date.now();
+    const elapsed = Math.floor((now - timerState.startTime) / 1000);
+    const expectedTime = Math.max(0, timerState.expectedEndTime - now);
+    const newCurrentTime = Math.ceil(expectedTime / 1000);
     
-    if (timerState.currentTime <= 3 && timerState.currentTime > 0) {
-        voiceManager.countdown(timerState.currentTime);
-    }
-    
-    if (timerState.currentTime <= 0) {
-        handleTaskComplete();
+    // 実際の経過時間に基づいて現在時刻を調整
+    if (newCurrentTime !== timerState.currentTime) {
+        timerState.currentTime = newCurrentTime;
+        
+        if (timerState.currentTime <= 3 && timerState.currentTime > 0) {
+            voiceManager.countdown(timerState.currentTime);
+        }
+        
+        if (timerState.currentTime <= 0) {
+            handleTaskComplete();
+            return;
+        }
     }
     
     updateDisplay();
@@ -349,6 +360,10 @@ function startTask(taskIndex) {
     const task = customTasks[taskIndex];
     timerState.currentTime = task.duration;
     
+    // 高精度タイマーのための時刻設定
+    timerState.startTime = Date.now();
+    timerState.expectedEndTime = timerState.startTime + (task.duration * 1000);
+    
     voiceManager.announceTask(task, taskIndex + 1, customTasks.length);
     updateDisplay();
 }
@@ -382,6 +397,8 @@ function initializeTimer() {
     timerState.isPreparation = false;
     timerState.isWaitingForNext = false;
     timerState.loopCount = 0;
+    timerState.startTime = null;
+    timerState.expectedEndTime = null;
     
     updateDisplay();
 }
@@ -409,6 +426,10 @@ function startNewSession() {
     
     utterance.onend = () => {
         // 音声読み上げ完了後にカウントダウン開始
+        // 高精度タイマーのための時刻設定
+        timerState.startTime = Date.now();
+        timerState.expectedEndTime = timerState.startTime + (APP_CONFIG.countdownFrom * 1000);
+        
         timerState.intervalId = setInterval(timerTick, APP_CONFIG.tickInterval);
         updateDisplay();
     };
@@ -418,6 +439,10 @@ function startNewSession() {
     } else {
         console.log('音声通知:', `${timerState.workoutName}を開始します`);
         // 音声未対応の場合は即座にカウントダウン開始
+        // 高精度タイマーのための時刻設定
+        timerState.startTime = Date.now();
+        timerState.expectedEndTime = timerState.startTime + (APP_CONFIG.countdownFrom * 1000);
+        
         timerState.intervalId = setInterval(timerTick, APP_CONFIG.tickInterval);
         updateDisplay();
     }
@@ -430,6 +455,11 @@ function handleStart() {
     if (timerState.isPaused) {
         timerState.isRunning = true;
         timerState.isPaused = false;
+        
+        // 一時停止から再開時の時刻調整
+        timerState.startTime = Date.now();
+        timerState.expectedEndTime = timerState.startTime + (timerState.currentTime * 1000);
+        
         timerState.intervalId = setInterval(timerTick, APP_CONFIG.tickInterval);
         voiceManager.speak('タイマーを再開');
     } else if (timerState.currentTaskIndex >= customTasks.length) {
