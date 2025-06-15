@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>通知テストツール - HIIT Timer</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .status.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .status.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .status.warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .status.info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .test-button {
+            background: #28a745;
+        }
+        .test-button:hover {
+            background: #218838;
+        }
+        
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+        
+        .log {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #1e1e1e;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+        }
+        
+        .guide {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        
+        .guide h4 {
+            margin-top: 0;
+            color: #495057;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔔 通知テストツール</h1>
+        
+        <!-- 環境情報セクション -->
+        <div class="section">
+            <h3>🔍 環境情報</h3>
+            <div id="environmentInfo">
+                <p>環境情報を取得中...</p>
+            </div>
+        </div>
+        
+        <!-- 通知状態セクション -->
+        <div class="section">
+            <h3>📋 通知状態</h3>
+            <div id="notificationStatus">
+                <p>通知状態を確認中...</p>
+            </div>
+            <button id="requestPermissionBtn">📱 通知許可をリクエスト</button>
+        </div>
+        
+        <!-- テストボタンセクション -->
+        <div class="section">
+            <h3>🧪 通知テスト</h3>
+            <button id="testBasicBtn" class="test-button">基本通知テスト</button>
+            <button id="testTaskCompleteBtn" class="test-button">タスク完了通知テスト</button>
+            <button id="testWorkoutCompleteBtn" class="test-button">ワークアウト完了通知テスト</button>
+            <button id="testWithSoundBtn" class="test-button">音付き通知テスト</button>
+        </div>
+        
+        <!-- ブラウザ設定ガイド -->
+        <div class="section">
+            <h3>📖 ブラウザ別設定ガイド</h3>
+            <div id="browserGuide">
+                <p>ブラウザ情報を確認中...</p>
+            </div>
+        </div>
+        
+        <!-- ログセクション -->
+        <div class="section">
+            <h3>📝 ログ</h3>
+            <button onclick="clearLog()">ログクリア</button>
+            <div id="logContainer" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        // ログ管理
+        const logContainer = document.getElementById('logContainer');
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const color = {
+                'info': '#61dafb',
+                'success': '#98d982',
+                'error': '#ff6b6b',
+                'warning': '#feca57'
+            }[type] || '#f8f8f2';
+            
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `<span style="color: #6c757d">[${timestamp}]</span> <span style="color: ${color}">${message}</span>`;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+        
+        function clearLog() {
+            logContainer.innerHTML = '';
+        }
+        
+        // 環境検出
+        function detectEnvironment() {
+            const userAgent = navigator.userAgent;
+            const isMac = /Mac|iPhone|iPad|iPod/.test(userAgent);
+            const isSafari = /^((?!chrome|android).)*safari/i.test(userAgent);
+            const isChrome = /Chrome/.test(userAgent) && /Google Inc/.test(navigator.vendor);
+            const isFirefox = /Firefox/.test(userAgent);
+            const isSupported = 'Notification' in window;
+            
+            return {
+                isMac,
+                isSafari,
+                isChrome,
+                isFirefox,
+                isSupported,
+                userAgent,
+                permission: isSupported ? Notification.permission : 'not-supported'
+            };
+        }
+        
+        // 環境情報表示
+        function displayEnvironmentInfo() {
+            const env = detectEnvironment();
+            const container = document.getElementById('environmentInfo');
+            
+            let browserName = 'Unknown';
+            if (env.isSafari) browserName = 'Safari';
+            else if (env.isChrome) browserName = 'Chrome';
+            else if (env.isFirefox) browserName = 'Firefox';
+            
+            container.innerHTML = `
+                <div class="status info">
+                    <strong>プラットフォーム:</strong> ${env.isMac ? 'Mac' : 'Other'}<br>
+                    <strong>ブラウザ:</strong> ${browserName}<br>
+                    <strong>通知サポート:</strong> ${env.isSupported ? '✅ 対応' : '❌ 非対応'}<br>
+                    <strong>現在の許可状態:</strong> ${env.permission}
+                </div>
+                <pre>${JSON.stringify(env, null, 2)}</pre>
+            `;
+            
+            log(`環境検出完了: ${browserName} on ${env.isMac ? 'Mac' : 'Other'}`, 'info');
+        }
+        
+        // 通知状態表示
+        function displayNotificationStatus() {
+            const env = detectEnvironment();
+            const container = document.getElementById('notificationStatus');
+            const btn = document.getElementById('requestPermissionBtn');
+            
+            if (!env.isSupported) {
+                container.innerHTML = '<div class="status error">❌ このブラウザは通知をサポートしていません</div>';
+                btn.disabled = true;
+                return;
+            }
+            
+            let statusClass = 'info';
+            let statusText = '';
+            
+            switch (env.permission) {
+                case 'granted':
+                    statusClass = 'success';
+                    statusText = '✅ 通知が許可されています';
+                    btn.disabled = true;
+                    btn.textContent = '🔔 通知許可済み';
+                    break;
+                case 'denied':
+                    statusClass = 'error';
+                    statusText = '❌ 通知が拒否されています';
+                    btn.disabled = true;
+                    btn.textContent = '🚫 通知拒否済み';
+                    break;
+                case 'default':
+                    statusClass = 'warning';
+                    statusText = '⚠️ 通知許可が必要です';
+                    btn.disabled = false;
+                    break;
+            }
+            
+            container.innerHTML = `<div class="status ${statusClass}">${statusText}</div>`;
+            log(`通知状態: ${env.permission}`, statusClass === 'error' ? 'error' : 'info');
+        }
+        
+        // ブラウザ設定ガイド表示
+        function displayBrowserGuide() {
+            const env = detectEnvironment();
+            const container = document.getElementById('browserGuide');
+            
+            let guide = '';
+            
+            if (env.isSafari) {
+                guide = `
+                    <div class="guide">
+                        <h4>🍎 Safari での設定方法</h4>
+                        <ol>
+                            <li>Safari メニュー > 環境設定 をクリック</li>
+                            <li>「Webサイト」タブを選択</li>
+                            <li>左側のリストから「通知」を選択</li>
+                            <li>このサイトを「許可」に設定</li>
+                            <li>ページを再読み込み</li>
+                        </ol>
+                    </div>
+                `;
+            } else if (env.isChrome) {
+                guide = `
+                    <div class="guide">
+                        <h4>🌐 Chrome での設定方法</h4>
+                        <ol>
+                            <li>アドレスバーの🔒アイコンをクリック</li>
+                            <li>「通知」項目を「許可」に変更</li>
+                            <li>ページを再読み込み</li>
+                        </ol>
+                        <p><strong>または：</strong></p>
+                        <ol>
+                            <li>Chrome メニュー > 設定 > プライバシーとセキュリティ > サイトの設定</li>
+                            <li>「通知」をクリック</li>
+                            <li>このサイトを許可リストに追加</li>
+                        </ol>
+                    </div>
+                `;
+            } else if (env.isFirefox) {
+                guide = `
+                    <div class="guide">
+                        <h4>🦊 Firefox での設定方法</h4>
+                        <ol>
+                            <li>アドレスバーの盾アイコンをクリック</li>
+                            <li>「通知をブロック中」の設定を変更</li>
+                            <li>ページを再読み込み</li>
+                        </ol>
+                        <p><strong>または：</strong></p>
+                        <ol>
+                            <li>Firefox メニュー > 設定 > プライバシーとセキュリティ</li>
+                            <li>「許可設定」セクションの「通知」で「設定」をクリック</li>
+                            <li>このサイトを許可リストに追加</li>
+                        </ol>
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = guide || '<p>ブラウザ固有の設定ガイドは利用できません。</p>';
+        }
+        
+        // 通知許可リクエスト
+        async function requestNotificationPermission() {
+            if (!('Notification' in window)) {
+                log('通知はサポートされていません', 'error');
+                return false;
+            }
+            
+            try {
+                log('通知許可をリクエスト中...', 'info');
+                const permission = await Notification.requestPermission();
+                log(`通知許可結果: ${permission}`, permission === 'granted' ? 'success' : 'error');
+                
+                displayNotificationStatus();
+                
+                if (permission === 'granted') {
+                    // テスト通知を表示
+                    showTestNotification('🎉 通知許可完了', {
+                        body: 'これからHIIT Timerの通知を受け取れます！',
+                        tag: 'permission-granted'
+                    });
+                }
+                
+                return permission === 'granted';
+            } catch (error) {
+                log(`通知許可エラー: ${error.message}`, 'error');
+                return false;
+            }
+        }
+        
+        // テスト通知表示
+        function showTestNotification(title, options = {}) {
+            if (Notification.permission !== 'granted') {
+                log('通知テストスキップ: 許可されていません', 'warning');
+                return;
+            }
+            
+            try {
+                log(`通知テスト: ${title}`, 'info');
+                
+                const defaultOptions = {
+                    icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOCIgZmlsbD0iIzM5OGJmNCIvPgo8dGV4dCB4PSIxNiIgeT0iMjAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5IPC90ZXh0Pgo8L3N2Zz4K',
+                    badge: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iOCIgY3k9IjgiIHI9IjgiIGZpbGw9IiNGRjYzNDciLz4KPC9zdmc+',
+                    requireInteraction: false,
+                    silent: false,
+                    ...options
+                };
+                
+                const notification = new Notification(title, defaultOptions);
+                
+                notification.onclick = () => {
+                    log(`通知クリック: ${title}`, 'success');
+                    window.focus();
+                    notification.close();
+                };
+                
+                notification.onerror = (error) => {
+                    log(`通知エラー: ${error}`, 'error');
+                };
+                
+                notification.onshow = () => {
+                    log(`通知表示成功: ${title}`, 'success');
+                };
+                
+                notification.onclose = () => {
+                    log(`通知クローズ: ${title}`, 'info');
+                };
+                
+                // 5秒後に自動クローズ
+                setTimeout(() => {
+                    notification.close();
+                }, 5000);
+                
+            } catch (error) {
+                log(`通知作成エラー: ${error.message}`, 'error');
+            }
+        }
+        
+        // イベントリスナー設定
+        document.addEventListener('DOMContentLoaded', () => {
+            displayEnvironmentInfo();
+            displayNotificationStatus();
+            displayBrowserGuide();
+            
+            // 通知許可ボタン
+            document.getElementById('requestPermissionBtn').addEventListener('click', requestNotificationPermission);
+            
+            // テストボタン
+            document.getElementById('testBasicBtn').addEventListener('click', () => {
+                showTestNotification('📱 基本通知テスト', {
+                    body: 'これは基本的な通知テストです',
+                    tag: 'basic-test'
+                });
+            });
+            
+            document.getElementById('testTaskCompleteBtn').addEventListener('click', () => {
+                showTestNotification('タスク完了', {
+                    body: 'タスク完了！',
+                    tag: 'task-complete'
+                });
+            });
+            
+            document.getElementById('testWorkoutCompleteBtn').addEventListener('click', () => {
+                showTestNotification('🎉 ワークアウト完了！', {
+                    body: '総タスク数: 6個、総時間: 03:00',
+                    tag: 'workout-complete',
+                    requireInteraction: true
+                });
+            });
+            
+            document.getElementById('testWithSoundBtn').addEventListener('click', () => {
+                showTestNotification('🔊 音付き通知', {
+                    body: 'この通知は音付きです',
+                    tag: 'sound-test',
+                    silent: false
+                });
+            });
+            
+            log('通知テストツールが初期化されました', 'success');
+        });
+    </script>
+</body>
+</html>
