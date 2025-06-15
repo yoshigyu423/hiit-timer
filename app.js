@@ -87,10 +87,11 @@ const elements = {
 };
 
 /**
- * 音声合成
+ * 音声合成（改良版）
  */
 const voiceManager = {
     isSupported: 'speechSynthesis' in window,
+    lastCountdownTime: 0, // 重複防止用
     
     speak(text) {
         if (!this.isSupported) {
@@ -111,6 +112,15 @@ const voiceManager = {
     },
     
     countdown(number) {
+        const now = Date.now();
+        // 500ms以内の重複音声を防止
+        if (now - this.lastCountdownTime < 500) {
+            console.log(`カウントダウン音声スキップ: ${number}秒（重複防止）`);
+            return;
+        }
+        
+        this.lastCountdownTime = now;
+        console.log(`カウントダウン音声実行: ${number}秒`);
         this.speak(number.toString());
     },
     
@@ -283,7 +293,7 @@ function updateButtonStates() {
 }
 
 /**
- * タイマーのメインループ（高精度版 - バックグラウンド対応）
+ * タイマーのメインループ（安定版）
  */
 function timerTick() {
     if (!timerState.isRunning) {
@@ -294,7 +304,7 @@ function timerTick() {
     const remainingTime = Math.max(0, timerState.expectedEndTime - now);
     const newCurrentTime = Math.ceil(remainingTime / 1000);
     
-    // バックグラウンドから復帰時の時刻補正
+    // 時間が変化した場合の処理
     if (newCurrentTime !== timerState.currentTime) {
         const timeDiff = timerState.currentTime - newCurrentTime;
         
@@ -304,13 +314,17 @@ function timerTick() {
             voiceManager.speak('タイマーを再同期しました');
         }
         
+        // 前の時間値を保存（カウントダウン音声用）
+        const previousTime = timerState.currentTime;
         timerState.currentTime = newCurrentTime;
         
-        // カウントダウン音声（バックグラウンド補正時は最後の3秒のみ）
-        if (timerState.currentTime <= 3 && timerState.currentTime > 0) {
+        // カウントダウン音声（3秒、2秒、1秒）
+        if (timerState.currentTime <= 3 && timerState.currentTime > 0 && previousTime > timerState.currentTime) {
+            console.log(`カウントダウン音声: ${timerState.currentTime}秒`);
             voiceManager.countdown(timerState.currentTime);
         }
         
+        // タイマー終了処理
         if (timerState.currentTime <= 0) {
             handleTaskComplete();
             return;
@@ -459,16 +473,22 @@ function startNewSession() {
                 resolve(); // エラーでもカウントダウンを開始
             };
             
-            // タイムアウト処理（5秒で強制開始）
+            // タイムアウト処理（3秒で強制開始に短縮）
             const timeout = setTimeout(() => {
                 console.warn('音声読み上げタイムアウト - カウントダウンを強制開始');
                 resolve();
-            }, 5000);
+            }, 3000);
             
             utterance.onend = () => {
                 clearTimeout(timeout);
                 console.log('音声読み上げ完了 - カウントダウン開始');
                 resolve();
+            };
+            
+            utterance.onerror = (error) => {
+                clearTimeout(timeout);
+                console.warn('音声読み上げエラー:', error);
+                resolve(); // エラーでもカウントダウンを開始
             };
             
             speechSynthesis.speak(utterance);
@@ -479,9 +499,17 @@ function startNewSession() {
     startCountdownAfterSpeech().then(() => {
         if (!timerState.isRunning) return; // 途中でキャンセルされた場合
         
+        console.log('準備カウントダウン開始');
+        
         // 高精度タイマーのための時刻設定
         timerState.startTime = Date.now();
         timerState.expectedEndTime = timerState.startTime + (APP_CONFIG.countdownFrom * 1000);
+        
+        // 初回の3秒カウントダウン音声を即座に再生
+        if (timerState.currentTime <= 3 && timerState.currentTime > 0) {
+            console.log(`初回カウントダウン音声: ${timerState.currentTime}秒`);
+            voiceManager.countdown(timerState.currentTime);
+        }
         
         // setIntervalでタイマーを開始
         clearInterval(timerState.intervalId); // 既存のタイマーをクリア
