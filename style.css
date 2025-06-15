@@ -493,17 +493,20 @@ body {
 .time-inputs {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+    justify-content: center;
 }
 
 .task-minutes-input,
 .task-seconds-input {
-    width: 50px;
+    width: 60px;
     border: 1px solid #d1d5db;
     border-radius: 6px;
-    padding: 8px;
-    font-size: 0.9rem;
+    padding: 10px;
+    font-size: 1rem;
     text-align: center;
+    background: #ffffff;
 }
 
 .task-minutes-input:focus,
@@ -514,9 +517,10 @@ body {
 }
 
 .time-label {
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     color: #6b7280;
     font-weight: 500;
+    white-space: nowrap;
 }
 
 /* タイマー制御セクション */
@@ -685,6 +689,18 @@ body {
         flex-direction: column;
         gap: 0.5rem;
         align-items: stretch;
+    }
+    
+    .time-inputs {
+        justify-content: flex-start;
+        gap: 0.4rem;
+    }
+    
+    .task-minutes-input,
+    .task-seconds-input {
+        width: 50px;
+        padding: 8px;
+        font-size: 0.9rem;
     }
     
     .mode-buttons {

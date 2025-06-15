@@ -286,6 +286,10 @@ function updateButtonStates() {
  * タイマーのメインループ（高精度版 - バックグラウンド対応）
  */
 function timerTick() {
+    if (!timerState.isRunning) {
+        return; // タイマーが停止していれば終了
+    }
+    
     const now = Date.now();
     const remainingTime = Math.max(0, timerState.expectedEndTime - now);
     const newCurrentTime = Math.ceil(remainingTime / 1000);
@@ -314,13 +318,6 @@ function timerTick() {
     }
     
     updateDisplay();
-    
-    // 高精度維持のため、requestAnimationFrame も併用
-    if (timerState.isRunning) {
-        requestAnimationFrame(() => {
-            setTimeout(timerTick, 100); // 100ms間隔でより細かくチェック
-        });
-    }
 }
 
 /**
@@ -486,14 +483,9 @@ function startNewSession() {
         timerState.startTime = Date.now();
         timerState.expectedEndTime = timerState.startTime + (APP_CONFIG.countdownFrom * 1000);
         
-        // setInterval の代わりに高精度タイマーを使用
+        // setIntervalでタイマーを開始
         clearInterval(timerState.intervalId); // 既存のタイマーをクリア
-        timerState.intervalId = setInterval(() => {
-            // setInterval をフォールバックとして使用
-        }, APP_CONFIG.tickInterval);
-        
-        // 即座にtimerTickを開始
-        timerTick();
+        timerState.intervalId = setInterval(timerTick, APP_CONFIG.tickInterval);
         
         updateDisplay();
     });
@@ -514,13 +506,9 @@ function handleStart() {
         timerState.startTime = Date.now();
         timerState.expectedEndTime = timerState.startTime + (timerState.currentTime * 1000);
         
-        // 高精度タイマーで再開
+        // タイマーで再開
         clearInterval(timerState.intervalId);
-        timerState.intervalId = setInterval(() => {
-            // フォールバック用
-        }, APP_CONFIG.tickInterval);
-        
-        timerTick(); // 即座に開始
+        timerState.intervalId = setInterval(timerTick, APP_CONFIG.tickInterval);
         voiceManager.speak('タイマーを再開');
     } else if (timerState.currentTaskIndex >= customTasks.length) {
         initializeTimer();
@@ -563,9 +551,7 @@ function handleNextTask() {
     // タイマーを再開して次のタスクに進む
     timerState.isRunning = true;
     clearInterval(timerState.intervalId);
-    timerState.intervalId = setInterval(() => {
-        // フォールバック用
-    }, APP_CONFIG.tickInterval);
+    timerState.intervalId = setInterval(timerTick, APP_CONFIG.tickInterval);
     
     proceedToNextTask();
 }
